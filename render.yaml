@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: resume-parser
+    env: docker
+    dockerfilePath: ./Dockerfile.production
+    dockerContext: .
+    envVars:
+      - key: GROK_API_KEYS
+        sync: false
+      - key: BACKEND_URL
+        value: http://localhost:8000
+    healthCheckPath: /api/health

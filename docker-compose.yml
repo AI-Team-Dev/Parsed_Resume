@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  resume-parser:
+    build: 
+      context: .
+      dockerfile: Dockerfile.production
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - GROK_API_KEYS=${GROK_API_KEYS}
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:8000}
+    volumes:
+      # Mount data directory for file access
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

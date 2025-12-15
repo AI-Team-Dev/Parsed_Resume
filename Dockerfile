@@ -22,8 +22,8 @@ COPY grok_resume_prompt.txt ./
 RUN mkdir -p /etc/supervisor/conf.d
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Create data directory
-RUN mkdir -p /app/data
+# Create data directories
+RUN mkdir -p /app/data /app/data/uploads /app/data/outputs
 
 # Expose ports
 # Render assigns PORT dynamically (usually 10000)

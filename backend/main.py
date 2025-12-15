@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import os
@@ -6,7 +6,8 @@ import sys
 import asyncio
 import uuid
 import json
-from typing import Dict
+import shutil
+from typing import Dict, List
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -175,6 +176,61 @@ async def get_progress(job_id: str):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     
     return progress_tracker[job_id]
+
+@app.post("/api/upload")
+async def upload_files(files: List[UploadFile] = File(...)):
+    """
+    Upload resume files to the server
+    
+    Returns:
+        Path to the folder containing uploaded files
+    """
+    # Create upload directory
+    upload_dir = "/app/data/uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Create a unique session folder for this upload
+    session_id = str(uuid.uuid4())
+    session_dir = os.path.join(upload_dir, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    
+    uploaded_files = []
+    skipped_files = []
+    
+    for file in files:
+        # Validate file type
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in ['.pdf', '.docx', '.doc']:
+            skipped_files.append(file.filename)
+            continue
+        
+        # Save file
+        file_path = os.path.join(session_dir, file.filename)
+        try:
+            content = await file.read()
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            uploaded_files.append(file.filename)
+        except Exception as e:
+            skipped_files.append(f"{file.filename} (error: {str(e)})")
+    
+    if not uploaded_files:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No valid resume files uploaded. Supported formats: PDF, DOCX, DOC. Skipped: {', '.join(skipped_files) if skipped_files else 'none'}"
+        )
+    
+    response = {
+        "status": "success",
+        "upload_folder": session_dir,
+        "uploaded_files": uploaded_files,
+        "count": len(uploaded_files)
+    }
+    
+    if skipped_files:
+        response["skipped_files"] = skipped_files
+    
+    return response
 
 @app.get("/api/health")
 async def health_check():

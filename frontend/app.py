@@ -16,7 +16,7 @@ except ImportError:
 def browse_folder():
     """Open folder dialog and return selected folder path"""
     if not TKINTER_AVAILABLE:
-        st.error("tkinter is not available. Please install it or use manual path entry.")
+        st.info("ℹ️ File browser is not available in cloud deployments. Please enter the path manually in the text field above.")
         return None
     try:
         root = tk.Tk()
@@ -36,7 +36,7 @@ def browse_folder():
 def browse_file(title="Select File", filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]):
     """Open file dialog and return selected file path"""
     if not TKINTER_AVAILABLE:
-        st.error("tkinter is not available. Please install it or use manual path entry.")
+        st.info("ℹ️ File browser is not available in cloud deployments. Please enter the path manually in the text field above.")
         return None
     try:
         root = tk.Tk()
@@ -52,7 +52,7 @@ def browse_file(title="Select File", filetypes=[("Excel files", "*.xlsx"), ("All
 def browse_save_file(title="Save File As", filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")], initialfile="output.xlsx"):
     """Open save file dialog and return selected file path"""
     if not TKINTER_AVAILABLE:
-        st.error("tkinter is not available. Please install it or use manual path entry.")
+        st.info("ℹ️ File browser is not available in cloud deployments. Please enter the path manually in the text field above.")
         return None
     try:
         root = tk.Tk()
@@ -142,23 +142,27 @@ with col1:
     elif "input_folder" in st.session_state:
         input_value = st.session_state.input_folder
     
-    col_input1, col_input2 = st.columns([4, 1])
+    if not TKINTER_AVAILABLE:
+        st.info("ℹ️ **Note for cloud deployments:** File browser is not available. Please enter the full path to your folder manually.")
+    
+    col_input1, col_input2 = st.columns([4, 1] if TKINTER_AVAILABLE else [1, 0])
     with col_input1:
         input_folder = st.text_input(
             "Input folder path",
             value=input_value,
-            placeholder="C:\\Users\\YourName\\Documents\\resumes",
+            placeholder="C:\\Users\\YourName\\Documents\\resumes" if os.name == 'nt' else "/path/to/resumes",
             help="Enter the full path to the folder containing your resume files (PDF, DOCX, DOC)",
             key="input_folder",
             label_visibility="collapsed"
         )
-    with col_input2:
-        st.write("")  # Spacing for alignment
-        if st.button("Browse", key="browse_input", use_container_width=True):
-            selected_folder = browse_folder()
-            if selected_folder:
-                st.session_state._browse_input_result = selected_folder
-                st.rerun()
+    if TKINTER_AVAILABLE:
+        with col_input2:
+            st.write("")  # Spacing for alignment
+            if st.button("Browse", key="browse_input", use_container_width=True):
+                selected_folder = browse_folder()
+                if selected_folder:
+                    st.session_state._browse_input_result = selected_folder
+                    st.rerun()
     
     if input_folder and os.path.exists(input_folder):
         st.success(f"Folder found: {input_folder}")
@@ -206,32 +210,33 @@ with col2:
             # Use existing session state value
             output_file_value = st.session_state.get("output_file_path", "")
         
-        col_input, col_file = st.columns([5, 1])
+        col_input, col_file = st.columns([5, 1] if TKINTER_AVAILABLE else [1, 0])
         with col_input:
             output_path_input = st.text_input(
                 "Output file or folder path",
                 value=output_file_value,
-                placeholder="C:\\Users\\YourName\\Documents\\output.xlsx or C:\\Users\\YourName\\Documents",
-                help="Enter file path (to append) or folder path (to create new file). You can also use the browse button.",
+                placeholder="C:\\Users\\YourName\\Documents\\output.xlsx or C:\\Users\\YourName\\Documents" if os.name == 'nt' else "/path/to/output.xlsx or /path/to/folder",
+                help="Enter file path (to append) or folder path (to create new file)." + (" You can also use the browse button." if TKINTER_AVAILABLE else ""),
                 key="output_file_path",
                 label_visibility="collapsed"
             )
             # Set output_path for processing
             output_path = output_path_input
-        with col_file:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            # Browse for file button
-            if st.button("File", key="browse_output_file", use_container_width=True, help="Select an existing Excel file to append data"):
-                # Use browse_file to select existing files for appending
-                selected_file = browse_file(title="Select Excel File to Append Data", filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")])
-                if selected_file:
-                    # Store result and update session state
-                    st.session_state._browse_output_file_result = selected_file
-                    # Update the widget value by setting session state before rerun
-                    if "output_file_path" not in st.session_state:
-                        st.session_state.output_file_path = selected_file
-                    st.rerun()
+        if TKINTER_AVAILABLE:
+            with col_file:
+                st.write("")  # Spacing
+                st.write("")  # Spacing
+                # Browse for file button
+                if st.button("File", key="browse_output_file", use_container_width=True, help="Select an existing Excel file to append data"):
+                    # Use browse_file to select existing files for appending
+                    selected_file = browse_file(title="Select Excel File to Append Data", filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")])
+                    if selected_file:
+                        # Store result and update session state
+                        st.session_state._browse_output_file_result = selected_file
+                        # Update the widget value by setting session state before rerun
+                        if "output_file_path" not in st.session_state:
+                            st.session_state.output_file_path = selected_file
+                        st.rerun()
     else:
         st.caption("Enter output folder path (a new file 'Parsed_Resumes.xlsx' will be created)")
         
@@ -253,25 +258,26 @@ with col2:
             # Use existing session state value
             output_folder_value = st.session_state.get("output_folder_path", "")
         
-        col_output1, col_output2 = st.columns([4, 1])
+        col_output1, col_output2 = st.columns([4, 1] if TKINTER_AVAILABLE else [1, 0])
         with col_output1:
             output_folder = st.text_input(
                 "Output folder path",
                 value=output_folder_value,
-                placeholder="C:\\Users\\YourName\\Documents",
+                placeholder="C:\\Users\\YourName\\Documents" if os.name == 'nt' else "/path/to/output",
                 help="Enter folder path (filename will be 'Parsed_Resumes.xlsx'). A new file will be created.",
                 key="output_folder_path",
                 label_visibility="collapsed"
             )
-        with col_output2:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            # Handle browse button click - placed next to input field
-            if st.button("Browse", key="browse_output_folder", use_container_width=True):
-                selected_folder = browse_folder()
-                if selected_folder:
-                    st.session_state._browse_output_folder_result = selected_folder
-                    st.rerun()
+        if TKINTER_AVAILABLE:
+            with col_output2:
+                st.write("")  # Spacing
+                st.write("")  # Spacing
+                # Handle browse button click - placed next to input field
+                if st.button("Browse", key="browse_output_folder", use_container_width=True):
+                    selected_folder = browse_folder()
+                    if selected_folder:
+                        st.session_state._browse_output_folder_result = selected_folder
+                        st.rerun()
         if output_folder:
             output_path = os.path.join(output_folder, "Parsed_Resumes.xlsx")
         else:

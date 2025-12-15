@@ -129,13 +129,28 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("Input Source")
     
+    # For cloud deployments, default to Upload Files and show prominent notice
+    if not TKINTER_AVAILABLE:
+        st.info("🌐 **Cloud Deployment Detected** - Use 'Upload Files' to upload your resume files directly.")
+        if "input_method" not in st.session_state:
+            st.session_state.input_method = "Upload Files"
+    
+    # Input method selection - default to Upload Files for cloud deployments
+    if "input_method" not in st.session_state:
+        st.session_state.input_method = "Upload Files" if not TKINTER_AVAILABLE else "Folder Path"
+    
     # Input method selection
     input_method = st.radio(
         "Choose input method",
         ["Upload Files", "Folder Path"],
+        index=0 if st.session_state.input_method == "Upload Files" else 1,
         help="Upload files directly (recommended for cloud) or provide a folder path (for local/server files)",
         key="input_method"
     )
+    
+    # Show warning if using Folder Path in cloud deployment
+    if input_method == "Folder Path" and not TKINTER_AVAILABLE:
+        st.error("❌ **Folder Path method doesn't work in cloud deployments!**\n\nPlease switch to **'Upload Files'** method above to upload your files directly.")
     
     input_folder = None
     
@@ -254,7 +269,14 @@ with col1:
             except Exception as e:
                 st.warning(f"Could not list files: {str(e)}")
         elif input_folder:
-            st.error(f"Folder not found: {input_folder}")
+            # Check if it's a Windows path (likely local machine path)
+            is_windows_path = input_folder.startswith("C:\\") or "\\" in input_folder and not input_folder.startswith("/")
+            if is_windows_path and not TKINTER_AVAILABLE:
+                st.error(f"❌ **Local Windows path detected:** `{input_folder}`\n\n" +
+                        "**This won't work in cloud deployments!**\n\n" +
+                        "💡 **Solution:** Switch to **'Upload Files'** method above and upload your files directly.")
+            else:
+                st.error(f"Folder not found: {input_folder}\n\n💡 **Tip:** For cloud deployments, use 'Upload Files' method instead.")
 
 with col2:
     st.subheader("Output Location")
@@ -558,8 +580,16 @@ if st.button("🚀 Process Resumes", type="primary", use_container_width=True):
     if "job_output_path" in st.session_state:
         del st.session_state.job_output_path
     
-    if not input_folder or not os.path.exists(input_folder):
-        st.error("Please enter a valid input folder path")
+    if not input_folder:
+        if input_method == "Upload Files":
+            st.error("Please upload files first using the 'Upload Files' button above.")
+        else:
+            st.error("Please enter a valid input folder path or switch to 'Upload Files' method.")
+    elif not os.path.exists(input_folder):
+        if input_method == "Folder Path" and not TKINTER_AVAILABLE:
+            st.error(f"❌ Folder not found: {input_folder}\n\n💡 **For cloud deployments, please use 'Upload Files' method instead.** Local Windows paths like `C:\\Users\\...` don't work on cloud servers.")
+        else:
+            st.error(f"Folder not found: {input_folder}")
     elif not output_path:
         st.error("Please enter an output path")
     else:

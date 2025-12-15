@@ -127,66 +127,134 @@ st.header("Select Folders")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Input Folder")
-    st.caption("Enter path to folder containing resumes")
+    st.subheader("Input Source")
     
-    # Get the value to use - prioritize browse result, then existing session state
-    input_value = ""
-    if "_browse_input_result" in st.session_state:
-        # We have a new browse result - use it and clear temp key
-        input_value = st.session_state._browse_input_result
-        # Only set session state if key doesn't exist yet (to avoid modification error)
-        if "input_folder" not in st.session_state:
-            st.session_state.input_folder = input_value
-        del st.session_state._browse_input_result
-    elif "input_folder" in st.session_state:
-        input_value = st.session_state.input_folder
+    # Input method selection
+    input_method = st.radio(
+        "Choose input method",
+        ["Upload Files", "Folder Path"],
+        help="Upload files directly (recommended for cloud) or provide a folder path (for local/server files)",
+        key="input_method"
+    )
     
-    if not TKINTER_AVAILABLE:
-        st.info("ℹ️ **Note for cloud deployments:** File browser is not available. Please enter the full path to your folder manually.")
+    input_folder = None
     
-    if TKINTER_AVAILABLE:
-        col_input1, col_input2 = st.columns([4, 1])
-        with col_input1:
+    if input_method == "Upload Files":
+        st.caption("Upload your resume files (PDF, DOCX, DOC)")
+        
+        uploaded_files = st.file_uploader(
+            "Select resume files",
+            type=['pdf', 'docx', 'doc'],
+            accept_multiple_files=True,
+            help="Upload one or more resume files. Supported formats: PDF, DOCX, DOC",
+            key="uploaded_files"
+        )
+        
+        if uploaded_files:
+            st.success(f"✅ {len(uploaded_files)} file(s) selected")
+            if st.button("📤 Upload Files", key="upload_button", type="primary"):
+                try:
+                    # Prepare files for upload (FastAPI expects files parameter)
+                    files_to_upload = []
+                    for file in uploaded_files:
+                        # Reset file pointer
+                        file.seek(0)
+                        files_to_upload.append(("files", (file.name, file.getvalue(), file.type)))
+                    
+                    # Upload to backend
+                    with st.spinner("Uploading files..."):
+                        upload_response = requests.post(
+                            f"{BACKEND_URL}/api/upload",
+                            files=files_to_upload,
+                            timeout=120
+                        )
+                    
+                    if upload_response.status_code == 200:
+                        result = upload_response.json()
+                        input_folder = result["upload_folder"]
+                        st.session_state.uploaded_folder = input_folder
+                        st.session_state.input_method = "Upload Files"  # Remember method
+                        st.success(f"✅ Uploaded {result['count']} file(s) successfully!")
+                        if "skipped_files" in result:
+                            st.warning(f"⚠️ Skipped {len(result['skipped_files'])} invalid file(s)")
+                        st.rerun()
+                    else:
+                        try:
+                            error_detail = upload_response.json().get("detail", "Unknown error")
+                            st.error(f"❌ Upload failed: {error_detail}")
+                        except:
+                            st.error(f"❌ Upload failed: {upload_response.status_code} - {upload_response.text}")
+                except requests.exceptions.ConnectionError:
+                    st.error(f"❌ Cannot connect to backend at {BACKEND_URL}")
+                    st.info("Make sure the backend server is running!")
+                except Exception as e:
+                    st.error(f"❌ Upload error: {str(e)}")
+        
+        # Use uploaded folder if available
+        if "uploaded_folder" in st.session_state:
+            input_folder = st.session_state.uploaded_folder
+            st.info(f"📁 Using uploaded files from previous session")
+    
+    else:  # Folder Path method
+        st.caption("Enter path to folder containing resumes")
+        
+        # Get the value to use - prioritize browse result, then existing session state
+        input_value = ""
+        if "_browse_input_result" in st.session_state:
+            # We have a new browse result - use it and clear temp key
+            input_value = st.session_state._browse_input_result
+            # Only set session state if key doesn't exist yet (to avoid modification error)
+            if "input_folder" not in st.session_state:
+                st.session_state.input_folder = input_value
+            del st.session_state._browse_input_result
+        elif "input_folder" in st.session_state:
+            input_value = st.session_state.input_folder
+        
+        if not TKINTER_AVAILABLE:
+            st.info("ℹ️ **Note for cloud deployments:** File browser is not available. Please use 'Upload Files' method instead.")
+        
+        if TKINTER_AVAILABLE:
+            col_input1, col_input2 = st.columns([4, 1])
+            with col_input1:
+                input_folder = st.text_input(
+                    "Input folder path",
+                    value=input_value,
+                    placeholder="C:\\Users\\YourName\\Documents\\resumes" if os.name == 'nt' else "/path/to/resumes",
+                    help="Enter the full path to the folder containing your resume files (PDF, DOCX, DOC)",
+                    key="input_folder",
+                    label_visibility="collapsed"
+                )
+            with col_input2:
+                st.write("")  # Spacing for alignment
+                if st.button("Browse", key="browse_input", use_container_width=True):
+                    selected_folder = browse_folder()
+                    if selected_folder:
+                        st.session_state._browse_input_result = selected_folder
+                        st.rerun()
+        else:
             input_folder = st.text_input(
                 "Input folder path",
                 value=input_value,
-                placeholder="C:\\Users\\YourName\\Documents\\resumes" if os.name == 'nt' else "/path/to/resumes",
-                help="Enter the full path to the folder containing your resume files (PDF, DOCX, DOC)",
+                placeholder="/app/data/uploads or server path",
+                help="Enter the full path to the folder containing your resume files (PDF, DOCX, DOC). For cloud deployments, use 'Upload Files' method instead.",
                 key="input_folder",
                 label_visibility="collapsed"
             )
-        with col_input2:
-            st.write("")  # Spacing for alignment
-            if st.button("Browse", key="browse_input", use_container_width=True):
-                selected_folder = browse_folder()
-                if selected_folder:
-                    st.session_state._browse_input_result = selected_folder
-                    st.rerun()
-    else:
-        input_folder = st.text_input(
-            "Input folder path",
-            value=input_value,
-            placeholder="C:\\Users\\YourName\\Documents\\resumes" if os.name == 'nt' else "/path/to/resumes",
-            help="Enter the full path to the folder containing your resume files (PDF, DOCX, DOC)",
-            key="input_folder",
-            label_visibility="collapsed"
-        )
-    
-    if input_folder and os.path.exists(input_folder):
-        st.success(f"Folder found: {input_folder}")
-        try:
-            files = [f for f in os.listdir(input_folder) if os.path.isfile(os.path.join(input_folder, f))]
-            st.info(f"Found {len(files)} file(s) in folder")
-            if st.checkbox("Show files", key="show_input_files"):
-                for f in files[:10]:
-                    st.text(f"  • {f}")
-                if len(files) > 10:
-                    st.text(f"  ... and {len(files) - 10} more")
-        except Exception as e:
-            st.warning(f"Could not list files: {str(e)}")
-    elif input_folder:
-        st.error(f"Folder not found: {input_folder}")
+        
+        if input_folder and os.path.exists(input_folder):
+            st.success(f"Folder found: {input_folder}")
+            try:
+                files = [f for f in os.listdir(input_folder) if os.path.isfile(os.path.join(input_folder, f))]
+                st.info(f"Found {len(files)} file(s) in folder")
+                if st.checkbox("Show files", key="show_input_files"):
+                    for f in files[:10]:
+                        st.text(f"  • {f}")
+                    if len(files) > 10:
+                        st.text(f"  ... and {len(files) - 10} more")
+            except Exception as e:
+                st.warning(f"Could not list files: {str(e)}")
+        elif input_folder:
+            st.error(f"Folder not found: {input_folder}")
 
 with col2:
     st.subheader("Output Location")
@@ -219,6 +287,9 @@ with col2:
             # Use existing session state value
             output_file_value = st.session_state.get("output_file_path", "")
         
+        # Default output for cloud deployments
+        default_output_file = "/app/data/outputs/output.xlsx" if not TKINTER_AVAILABLE and not output_file_value else output_file_value
+        
         if TKINTER_AVAILABLE:
             col_input, col_file = st.columns([5, 1])
             with col_input:
@@ -249,16 +320,19 @@ with col2:
         else:
             output_path_input = st.text_input(
                 "Output file or folder path",
-                value=output_file_value,
-                placeholder="C:\\Users\\YourName\\Documents\\output.xlsx or C:\\Users\\YourName\\Documents" if os.name == 'nt' else "/path/to/output.xlsx or /path/to/folder",
-                help="Enter file path (to append) or folder path (to create new file).",
+                value=default_output_file,
+                placeholder="/app/data/outputs/output.xlsx",
+                help="Enter file path (to append) or folder path (to create new file). Default: /app/data/outputs/output.xlsx for cloud deployments.",
                 key="output_file_path",
                 label_visibility="collapsed"
             )
             # Set output_path for processing
-            output_path = output_path_input
+            output_path = output_path_input if output_path_input else default_output_file
     else:
         st.caption("Enter output folder path (a new file 'Parsed_Resumes.xlsx' will be created)")
+        
+        # Default output path for cloud deployments
+        default_output = "/app/data/outputs" if not TKINTER_AVAILABLE else ""
         
         # Handle browse result - check before creating widget
         browse_folder_result = None
@@ -275,8 +349,8 @@ with col2:
                 del st.session_state.output_folder_path
             st.session_state.output_folder_path = output_folder_value
         else:
-            # Use existing session state value
-            output_folder_value = st.session_state.get("output_folder_path", "")
+            # Use existing session state value or default
+            output_folder_value = st.session_state.get("output_folder_path", default_output)
         
         if TKINTER_AVAILABLE:
             col_output1, col_output2 = st.columns([4, 1])
@@ -302,8 +376,8 @@ with col2:
             output_folder = st.text_input(
                 "Output folder path",
                 value=output_folder_value,
-                placeholder="C:\\Users\\YourName\\Documents" if os.name == 'nt' else "/path/to/output",
-                help="Enter folder path (filename will be 'Parsed_Resumes.xlsx'). A new file will be created.",
+                placeholder="/app/data/outputs",
+                help="Enter folder path (filename will be 'Parsed_Resumes.xlsx'). Default: /app/data/outputs for cloud deployments.",
                 key="output_folder_path",
                 label_visibility="collapsed"
             )
